@@ -1,0 +1,55 @@
+x-app-build: &app-build
+  context: .
+  dockerfile: app/Dockerfile
+
+services:
+  db:
+    image: postgres:18.4-alpine
+    container_name: "cleaner_db"
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  cache:
+    image: redis:8.8-alpine
+    container_name: "cleaner_cache"
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  web:
+    build: *app-build
+    container_name: "cleaner_api"
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      cache:
+        condition: service_healthy
+  migration:
+    build: *app-build
+    container_name: "cleaner_migrations"
+    env_file: 
+      - .env
+    command: ["alembic", "-c", '/code/alembic.ini', "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"

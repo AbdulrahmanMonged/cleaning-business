@@ -1,0 +1,10 @@
+fastapi[standard]
+redis
+asyncpg
+alembic
+pwdlib[argon2, bcrypt]
+testcontainers[postgresql, redis]
+pytest-asyncio
+httpx
+asgi-lifespan
+pytest
