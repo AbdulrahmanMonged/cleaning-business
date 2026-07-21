@@ -3,12 +3,12 @@ from enum import Enum
 
 from pydantic import BaseModel
 from sqlalchemy import DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
+from app.core.security import get_password_hash
 
 
 class AppointmentStatus(Enum):
@@ -16,8 +16,8 @@ class AppointmentStatus(Enum):
     CONFIRMED = "confirmed"
 
 
-class Users(AsyncAttrs, Base):
-    __tablename__ = "users"
+class User(AsyncAttrs, Base):
+    __tablename__ = "user"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
     _hash_password: Mapped[str]
@@ -32,11 +32,26 @@ class Users(AsyncAttrs, Base):
 
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"))
 
+    appointments: Mapped[list["Appointments"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    role: Mapped["Roles"] = relationship(back_populates="user")
+
+    @hybrid_property
+    def password(self):
+        pass
+
+    @password.setter
+    def password(self, value):
+        self._hash_password = get_password_hash(value)
+
 
 class Roles(AsyncAttrs, Base):
     __tablename__ = "roles"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
+
+    user: Mapped[list["User"]] = relationship(back_populates="role")
 
 
 class Appointments(AsyncAttrs, Base):
@@ -62,11 +77,17 @@ class Appointments(AsyncAttrs, Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
+    user: Mapped["User"] = relationship(back_populates="appointments")
+
     @hybrid_property
-    def suggested_cleaners():
+    def suggested_cleaners(self):
         pass
 
 
 class HealthResponse(BaseModel):
     status: str = "healthy"
     version: str = "v1"
+
+
+class TokenPayload(BaseModel):
+    sub: str | None = None

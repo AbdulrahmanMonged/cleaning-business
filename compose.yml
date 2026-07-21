@@ -34,6 +34,8 @@ services:
   web:
     build: *app-build
     container_name: "cleaner_api"
+    volumes:
+      - ./migrations:/code/migrations
     env_file:
       - .env
     ports:

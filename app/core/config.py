@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     JWT_SECRET: str = "test-secret-do-not-use-elsewhere"
     JWT_EXPIRATION_IN_MINUTES: int = 15
+    JWT_ALGORITHM = "HS256"
 
     @property
     def DB_URL(self):
