@@ -1,9 +1,6 @@
 from functools import lru_cache
-from pathlib import Path
 
 from pydantic_settings import BaseSettings
-
-BASE_DIR = Path("__name__").resolve().parents[1]
 
 
 class Settings(BaseSettings):
@@ -18,7 +15,7 @@ class Settings(BaseSettings):
 
     JWT_SECRET: str = "test-secret-do-not-use-elsewhere"
     JWT_EXPIRATION_IN_MINUTES: int = 15
-    JWT_ALGORITHM = "HS256"
+    JWT_ALGORITHM: str = "HS256"
 
     @property
     def DB_URL(self):

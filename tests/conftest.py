@@ -4,12 +4,14 @@ from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 import pytest
 import pytest_asyncio
-from sqlalchemy import make_url
+from sqlalchemy import make_url, text
 from testcontainers.postgres import PostgresContainer
 from testcontainers.redis import RedisContainer
 
 from alembic.config import Config
 from alembic import command
+
+
 
 
 def run_migrations(db_url: str):
@@ -32,7 +34,6 @@ def service_urls():
         os.environ["DB_PASSWORD"] = str(postgres_url.password)
         os.environ["DB_PORT"] = str(postgres_url.port)
         os.environ["DB_NAME"] = str(postgres_url.database)
-        
 
         os.environ["REDIS_HOST"] = str(redis_host)
         os.environ["REDIS_PORT"] = str(redis_port)
@@ -56,5 +57,17 @@ def app(service_urls):
 async def client(app):
     async with LifespanManager(app) as manager:
         transport = ASGITransport(manager.app)
-        async with AsyncClient(transport=transport, base_url="http://test") as async_client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as async_client:
             yield async_client
+
+@pytest_asyncio.fixture(autouse=True, loop_scope="session")
+async def _clean_db(client):
+    yield
+    from app.core.db import get_engine
+    engine = get_engine()
+    async with engine.begin() as conn:
+        await conn.execute(
+            text('TRUNCATE TABLE "user", "appointments" RESTART IDENTITY CASCADE')
+        )

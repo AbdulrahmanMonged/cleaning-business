@@ -11,7 +11,7 @@ app.include_router(main.router)
 @app.exception_handler(StarletteHTTPException)
 async def general_req_handler(req: Request, exc: StarletteHTTPException):
     return JSONResponse(
-        content={"message", exc.detail},
+        content={"message": exc.detail},
         headers=exc.headers,
         status_code=exc.status_code,
     )

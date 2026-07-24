@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 import jwt
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 import redis.asyncio as redis
 from app.core.cache import get_redis_client
@@ -34,12 +35,12 @@ def get_redis(client: redis.Redis = Depends(get_redis_client)):
 cache_dependency = Annotated[redis.Redis, Depends(get_redis)]
 
 
-reusable_oauth2_scheme = OAuth2PasswordBearer("/v1/login")
+reusable_oauth2_scheme = OAuth2PasswordBearer("/v1/auth/login")
 
 token_dependency = Annotated[str, Depends(reusable_oauth2_scheme)]
 
 
-def get_current_user(session: db_dependency, token: token_dependency):
+async def get_current_user(session: db_dependency, token: token_dependency):
     settings = get_settings()
     try:
         payload = jwt.decode(
@@ -52,11 +53,19 @@ def get_current_user(session: db_dependency, token: token_dependency):
             detail="Could not validate credentials",
         )
 
-    user = session.get(User, ident=token_data.sub)
+    user = await session.scalar(select(User).where(User.name == token_data.sub))
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
+    await session.refresh(
+        user,
+        [
+            "role",
+            #    "appointments_as_cleaner",
+            #    "appointments_as_customer"
+        ],
+    )
     return user
 
 
