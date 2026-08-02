@@ -9,3 +9,4 @@ httpx
 asgi-lifespan
 pytest
 pyjwt
+structlog

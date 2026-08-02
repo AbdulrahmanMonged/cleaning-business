@@ -1,5 +1,5 @@
 from functools import lru_cache
-
+from typing import Literal
 from pydantic_settings import BaseSettings
 
 
@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "test-secret-do-not-use-elsewhere"
     JWT_EXPIRATION_IN_MINUTES: int = 15
     JWT_ALGORITHM: str = "HS256"
+
+    ADMIN_USER: str = "admin"
+    ADMIN_PASSWORD: str = "admin"
+    LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    ENV: Literal["development", "staging", "production"] = "development"
 
     @property
     def DB_URL(self):

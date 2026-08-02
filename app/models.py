@@ -10,7 +10,7 @@ from pydantic import (
     field_serializer,
     field_validator,
 )
-from sqlalchemy import DateTime, ForeignKey
+from sqlalchemy import DateTime, ForeignKey, and_, exists
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -19,13 +19,30 @@ from app.core.db import Base
 from app.core.security import get_password_hash
 
 
+class Roles(Enum):
+    USER = "user"
+    CLEANER = "cleaner"
+    ADMIN = "admin"
+    MANAGER = "manager"
+    CUSTOMER = "customer"
+
+
 class AppointmentStatus(Enum):
     SUBMITTED = "submitted"
     CONFIRMED = "confirmed"
+    ASSIGNED = "assigned"
+    IN_PROGRESS = "in_progress"
+    CANCELLED = "cancelled"
+
+
+class ApartmentSize(Enum):
+    LARGE = "large"
+    SMALL = "small"
+    MEDIUM = "medium"
 
 
 class User(AsyncAttrs, Base):
-    __tablename__ = "user"
+    __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(unique=True)
     _hash_password: Mapped[str]
@@ -38,7 +55,7 @@ class User(AsyncAttrs, Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"))
+    role: Mapped[Roles] = mapped_column(default=Roles.USER)
 
     appointments_as_cleaner: Mapped[list["Appointments"]] = relationship(
         back_populates="cleaner",
@@ -50,7 +67,6 @@ class User(AsyncAttrs, Base):
         cascade="all, delete-orphan",
         foreign_keys="Appointments.customer_id",
     )
-    role: Mapped["Roles"] = relationship(back_populates="user")
 
     @hybrid_property
     def password(self):
@@ -60,28 +76,41 @@ class User(AsyncAttrs, Base):
     def password(self, value):
         self._hash_password = get_password_hash(value)
 
+    @hybrid_property
+    def is_available(self):
+        if self.role is not Roles.CLEANER:
+            raise AttributeError("You can't access this attribute")
+        
+        return not any(
+            x.status in (AppointmentStatus.ASSIGNED, AppointmentStatus.IN_PROGRESS)
+            for x in self.appointments_as_cleaner
+        )
 
-class Roles(AsyncAttrs, Base):
-    __tablename__ = "roles"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str]
-
-    user: Mapped[list["User"]] = relationship(back_populates="role")
+    @is_available.expression
+    def is_available(cls):
+        return ~exists().where(
+            and_(
+                Appointments.cleaner_id == cls.id,
+                Appointments.status.in_(
+                    [AppointmentStatus.ASSIGNED, AppointmentStatus.IN_PROGRESS]
+                ),
+            )
+        )
 
 
 class Appointments(AsyncAttrs, Base):
     __tablename__ = "appointments"
     id: Mapped[int] = mapped_column(primary_key=True)
-    cleaner_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=True)
-    customer_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
+    cleaner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     status: Mapped[AppointmentStatus] = mapped_column(
         default=AppointmentStatus.SUBMITTED
     )
-    date: Mapped[datetime]
+    date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     hours: Mapped[int]
     is_recurred: Mapped[bool] = mapped_column(default=False)
     address: Mapped[str]
-    apartment_size: Mapped[str]
+    apartment_size: Mapped[ApartmentSize]
     paid_amount: Mapped[float] = mapped_column(nullable=True)
     createdAt: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -126,18 +155,11 @@ class UserCreate(BaseModel):
 
 
 class UserPublic(BaseModel):
+    id: int
     name: str
     createdAt: datetime
-    role: str
-    # appointments: list[Appointments] = []
-
+    role: Roles
     model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
-
-    @field_validator("role", mode="before")
-    def validate_role(cls, value):
-        if isinstance(value, Roles):
-            return value.name
-        return value
 
     @field_serializer("createdAt")
     def serialize_createdat(self, value: datetime):
@@ -154,3 +176,39 @@ class UserLogin(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "Bearer"
+
+
+class AppointmentCreateModel(BaseModel):
+    date: datetime
+    hours: int
+    address: str
+    apartment_size: ApartmentSize
+
+
+class AppointmentPublic(BaseModel):
+    id: int
+    cleaner: UserPublic | None
+    customer: UserPublic | None
+    status: AppointmentStatus
+    date: datetime
+    hours: int
+    address: str
+    apartment_size: ApartmentSize
+    is_recurred: bool
+    paid_amount: float | None
+    createdAt: datetime
+    updatedAt: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChangeUserRole(BaseModel):
+    target_role: Roles
+
+
+class UpdateAppointmentStatus(BaseModel):
+    new_status: AppointmentStatus
+
+
+class AssignCleanerModel(BaseModel):
+    cleaner_id: int

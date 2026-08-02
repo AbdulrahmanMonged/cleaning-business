@@ -1,16 +1,17 @@
 from typing import Annotated
 
+import jwt
+import redis.asyncio as redis
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-import jwt
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-import redis.asyncio as redis
+
 from app.core.cache import get_redis_client
 from app.core.config import get_settings
 from app.core.db import get_sessionmaker
-from app.models import TokenPayload, User
+from app.models import Roles, TokenPayload, User, UserPublic
 
 
 async def get_db(
@@ -70,3 +71,31 @@ async def get_current_user(session: db_dependency, token: token_dependency):
 
 
 user_dependency = Annotated[User, Depends(get_current_user)]
+
+
+class RoleChecker:
+    def __init__(self, roles: list[Roles] = [Roles.USER]):
+        self.allowed_roles = roles
+
+    def _get_matches(self, current_user: user_dependency):
+        return list(set(self.allowed_roles) & set([current_user.role]))
+
+    def __call__(self, current_user: user_dependency):
+        matches = self._get_matches(current_user)
+        if current_user.role is Roles.ADMIN:
+            return current_user
+        if matches == []:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You're not llowed to access this endpoint",
+            )
+        return current_user
+
+
+class _RoleDependencyFactory:
+    def __getitem__(self, roles):
+        role_list = roles if isinstance(roles, tuple) else (roles,)
+        return Annotated[UserPublic, Depends(RoleChecker(list(role_list)))]
+
+
+role_dependency = _RoleDependencyFactory()
