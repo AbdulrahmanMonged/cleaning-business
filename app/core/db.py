@@ -2,9 +2,10 @@ from functools import lru_cache
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+import structlog
 
 from app.core.config import get_settings
-
+log = structlog.get_logger()
 
 @lru_cache
 def get_engine():

@@ -1,7 +1,8 @@
+import structlog
 from wrapt import lru_cache
 import redis.asyncio as redis
 from app.core.config import get_settings
-
+log = structlog.get_logger()
 
 @lru_cache
 def get_redis_pool():
@@ -12,7 +13,7 @@ def get_redis_pool():
         max_connections=20,
         decode_responses=True
     )
-    
+
 @lru_cache
 def get_redis_client():
     return redis.Redis(connection_pool=get_redis_pool())

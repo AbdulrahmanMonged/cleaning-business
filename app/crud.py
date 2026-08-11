@@ -1,11 +1,15 @@
+from datetime import timedelta
+
 from fastapi import HTTPException, status
-from sqlalchemy import and_, select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
 
 from app.core.security import verify_password
 from app.models import (
     AppointmentCreateModel,
+    AppointmentPublic,
     AppointmentStatus,
     Appointments,
     AssignCleanerModel,
@@ -19,6 +23,7 @@ from app.models import (
 )
 
 RANDOM_HASH = "$argon2i$v=19$m=16,t=2,p=1$YXNkYXNkYXM$AVBfoT4P1h879+Muu0tCxQ"
+log = structlog.get_logger()
 
 
 async def create_user(user: UserCreate, db: AsyncSession):
@@ -58,10 +63,12 @@ async def insert_appointment(
         hours=appointment.hours,
         address=appointment.address,
         apartment_size=appointment.apartment_size,
+        child_appointments=[]
     )
     db.add(new_model)
     await db.flush()
-    await db.refresh(new_model, ["cleaner", "customer"])
+    # log.info(instance=new_model.child_appointments)
+    # await db.refresh(new_model, ["child_appointments"])
     return new_model
 
 
@@ -71,9 +78,9 @@ async def fetch_user_by_id(user_id: int, db: AsyncSession):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Could not find user"
         )
-    await db.refresh(
-        fetched_user, ["appointments_as_cleaner", "appointments_as_customer"]
-    )
+    # await db.refresh(
+    #     fetched_user, ["appointments_as_cleaner", "appointments_as_customer"]
+    # )
     return fetched_user
 
 
@@ -130,8 +137,10 @@ async def update_appointment_status(
     update_model: UpdateAppointmentStatus, appointment_id: int, db: AsyncSession
 ):
     selected_model = await fetch_appointment_by_id(appointment_id, db)
+    if update_model.new_status == AppointmentStatus.CONFIRMED:
+        selected_model.next_occurence_at = selected_model.date + timedelta(days=7)
     selected_model.status = update_model.new_status
-    await db.refresh(selected_model, ["customer", "cleaner"])
+    # await db.refresh(selected_model, ["customer", "cleaner"])
     return selected_model
 
 
@@ -146,5 +155,35 @@ async def assign_cleaner_to_appointment(
         )
     fetched_appointment.cleaner_id = payload.cleaner_id
     fetched_appointment.status = AppointmentStatus.ASSIGNED
-    await db.refresh(fetched_appointment, ["cleaner"])
+    # await db.refresh(fetched_appointment, ["cleaner", "customer"])
     return fetched_appointment
+
+
+async def trigger_is_recurred(appointment_id: int, db: AsyncSession):
+    result = await db.scalar(
+        update(Appointments)
+        .where(Appointments.id == appointment_id)
+        .values(is_recurred=True)
+        .returning(Appointments)
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Appointment does not exist"
+        )
+    # await db.refresh(result, attribute_names=["cleaner", "customer"])
+    return result
+
+
+async def get_cleaner_appointments(cleaner_id: int, db: AsyncSession):
+    return (
+        await db.scalars(
+            select(Appointments).where(
+                Appointments.cleaner_id == cleaner_id,
+                or_(
+                    Appointments.status == AppointmentStatus.SUBMITTED,
+                    Appointments.status == AppointmentStatus.IN_PROGRESS,
+                ),
+            )
+        )
+    ).all()

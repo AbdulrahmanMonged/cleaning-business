@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+import structlog
 
 from app.api.debs import db_dependency, user_dependency
 from app.core.config import get_settings
@@ -10,12 +11,15 @@ from app.crud import create_user, login_user
 from app.models import TokenResponse, UserCreate, UserPublic
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+log = structlog.get_logger()
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register", status_code=status.HTTP_201_CREATED, response_model=UserPublic
+)
 async def register_user(user: UserCreate, db: db_dependency):
     created_user = await create_user(user, db)
-    return UserPublic.model_validate(created_user)
+    return created_user
 
 
 @router.post("/login")
@@ -36,6 +40,6 @@ async def auth_user(
     return TokenResponse(access_token=jwt_token)
 
 
-@router.get("/me")
+@router.get("/me", response_model=UserPublic)
 async def get_me(user: user_dependency):
-    return UserPublic.model_validate(user)
+    return user

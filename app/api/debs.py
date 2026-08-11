@@ -7,12 +7,13 @@ from fastapi.security import OAuth2PasswordBearer
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+import structlog
 
 from app.core.cache import get_redis_client
 from app.core.config import get_settings
 from app.core.db import get_sessionmaker
 from app.models import Roles, TokenPayload, User, UserPublic
-
+log = structlog.get_logger()
 
 async def get_db(
     sessionmaker: async_sessionmaker[AsyncSession] = Depends(get_sessionmaker),

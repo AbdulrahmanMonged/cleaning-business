@@ -4,11 +4,12 @@ import jwt
 from pwdlib import PasswordHash
 from pwdlib.hashers.argon2 import Argon2Hasher
 from pwdlib.hashers.bcrypt import BcryptHasher
+import structlog
 
 from app.core.config import get_settings
 
 password_hash = PasswordHash((Argon2Hasher(), BcryptHasher()))
-
+log = structlog.get_logger()
 
 def create_access_token(subject: str, expire_delta: timedelta):
     settings = get_settings()

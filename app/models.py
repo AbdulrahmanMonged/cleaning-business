@@ -1,6 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Optional
 
 from pydantic import (
     BaseModel,
@@ -14,9 +15,12 @@ from sqlalchemy import DateTime, ForeignKey, and_, exists
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+import structlog
 
 from app.core.db import Base
 from app.core.security import get_password_hash
+
+log = structlog.get_logger()
 
 
 class Roles(Enum):
@@ -69,7 +73,7 @@ class User(AsyncAttrs, Base):
     )
 
     @hybrid_property
-    def password(self):
+    def password(self):  # pyright: ignore[reportRedeclaration]
         return None
 
     @password.setter
@@ -80,7 +84,7 @@ class User(AsyncAttrs, Base):
     def is_available(self):
         if self.role is not Roles.CLEANER:
             raise AttributeError("You can't access this attribute")
-        
+
         return not any(
             x.status in (AppointmentStatus.ASSIGNED, AppointmentStatus.IN_PROGRESS)
             for x in self.appointments_as_cleaner
@@ -109,9 +113,13 @@ class Appointments(AsyncAttrs, Base):
     date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     hours: Mapped[int]
     is_recurred: Mapped[bool] = mapped_column(default=False)
+    next_occurence_at: Mapped[datetime] = mapped_column(DateTime(True), nullable=True)
+    parent_appointment_id: Mapped[int] = mapped_column(
+        ForeignKey("appointments.id"), nullable=True
+    )
     address: Mapped[str]
     apartment_size: Mapped[ApartmentSize]
-    paid_amount: Mapped[float] = mapped_column(nullable=True)
+    paid_amount: Mapped[float | None] = mapped_column(nullable=True)
     createdAt: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -121,11 +129,28 @@ class Appointments(AsyncAttrs, Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    cleaner: Mapped["User"] = relationship(
-        back_populates="appointments_as_cleaner", foreign_keys=[cleaner_id]
+    cleaner: Mapped[User | None] = relationship(
+        back_populates="appointments_as_cleaner",
+        foreign_keys=[cleaner_id],
+        lazy="selectin",
     )
-    customer: Mapped["User"] = relationship(
-        back_populates="appointments_as_customer", foreign_keys=[customer_id]
+    customer: Mapped[User] = relationship(
+        back_populates="appointments_as_customer",
+        foreign_keys=[customer_id],
+        lazy="selectin",
+    )
+    parent_appointment: Mapped[Appointments | None] = relationship(
+        back_populates="child_appointments",
+        lazy="selectin",
+        foreign_keys=[parent_appointment_id],
+        remote_side=[id],
+        join_depth=1,
+    )
+    child_appointments: Mapped[list[Appointments]] = relationship(
+        back_populates="parent_appointment",
+        lazy="selectin",
+        foreign_keys=[parent_appointment_id],
+        join_depth=1,
     )
 
     @hybrid_property
@@ -180,9 +205,20 @@ class TokenResponse(BaseModel):
 
 class AppointmentCreateModel(BaseModel):
     date: datetime
-    hours: int
-    address: str
+    hours: int = Field(gt=0)
+    address: str = Field(min_length=6)
     apartment_size: ApartmentSize
+
+
+class RelatedAppointmentPublic(BaseModel):
+    id: int
+    status: AppointmentStatus
+    date: datetime
+    hours: int
+    is_recurred: bool
+    next_occurence_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AppointmentPublic(BaseModel):
@@ -198,6 +234,10 @@ class AppointmentPublic(BaseModel):
     paid_amount: float | None
     createdAt: datetime
     updatedAt: datetime
+    next_occurence_at: datetime | None
+
+    parent_appointment: RelatedAppointmentPublic | None = None
+    child_appointments: list[RelatedAppointmentPublic] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 

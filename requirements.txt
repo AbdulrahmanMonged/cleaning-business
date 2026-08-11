@@ -10,3 +10,4 @@ asgi-lifespan
 pytest
 pyjwt
 structlog
+APScheduler
