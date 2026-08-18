@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import select, update, case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
@@ -9,11 +9,11 @@ import structlog
 from app.core.security import verify_password
 from app.models import (
     AppointmentCreateModel,
-    AppointmentPublic,
     AppointmentStatus,
     Appointments,
     AssignCleanerModel,
     ChangeUserRole,
+    CollectMoneyModel,
     Roles,
     UpdateAppointmentStatus,
     User,
@@ -63,12 +63,10 @@ async def insert_appointment(
         hours=appointment.hours,
         address=appointment.address,
         apartment_size=appointment.apartment_size,
-        child_appointments=[]
+        child_appointments=[],
     )
     db.add(new_model)
     await db.flush()
-    # log.info(instance=new_model.child_appointments)
-    # await db.refresh(new_model, ["child_appointments"])
     return new_model
 
 
@@ -78,9 +76,7 @@ async def fetch_user_by_id(user_id: int, db: AsyncSession):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Could not find user"
         )
-    # await db.refresh(
-    #     fetched_user, ["appointments_as_cleaner", "appointments_as_customer"]
-    # )
+
     return fetched_user
 
 
@@ -103,7 +99,7 @@ async def fetch_all_available_clenaers(db: AsyncSession):
 async def change_role(
     user: UserPublic, target_user: ChangeUserRole, db: AsyncSession, user_id: int
 ):
-    if user.role is not Roles.ADMIN:
+    if user.role not in [Roles.ADMIN, Roles.MANAGER]:
         return None
     fetched_user = await fetch_user_by_id(user_id, db)
     fetched_user.role = target_user.target_role
@@ -137,10 +133,7 @@ async def update_appointment_status(
     update_model: UpdateAppointmentStatus, appointment_id: int, db: AsyncSession
 ):
     selected_model = await fetch_appointment_by_id(appointment_id, db)
-    if update_model.new_status == AppointmentStatus.CONFIRMED:
-        selected_model.next_occurence_at = selected_model.date + timedelta(days=7)
     selected_model.status = update_model.new_status
-    # await db.refresh(selected_model, ["customer", "cleaner"])
     return selected_model
 
 
@@ -155,7 +148,6 @@ async def assign_cleaner_to_appointment(
         )
     fetched_appointment.cleaner_id = payload.cleaner_id
     fetched_appointment.status = AppointmentStatus.ASSIGNED
-    # await db.refresh(fetched_appointment, ["cleaner", "customer"])
     return fetched_appointment
 
 
@@ -171,19 +163,68 @@ async def trigger_is_recurred(appointment_id: int, db: AsyncSession):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Appointment does not exist"
         )
-    # await db.refresh(result, attribute_names=["cleaner", "customer"])
     return result
 
 
-async def get_cleaner_appointments(cleaner_id: int, db: AsyncSession):
-    return (
-        await db.scalars(
-            select(Appointments).where(
-                Appointments.cleaner_id == cleaner_id,
-                or_(
-                    Appointments.status == AppointmentStatus.SUBMITTED,
-                    Appointments.status == AppointmentStatus.IN_PROGRESS,
+async def get_cleaner_appointments(
+    cleaner_id: int, db: AsyncSession, status: AppointmentStatus | None = None
+):
+    statement = select(Appointments).where(Appointments.cleaner_id == cleaner_id)
+    if status is not None:
+        statement = statement.where(Appointments.status == status)
+    return (await db.scalars(statement)).all()
+
+
+async def cleaner_collect_money(
+    cleaner_id: int, payload: CollectMoneyModel, db: AsyncSession
+):
+    result = await db.scalar(
+        update(Appointments)
+        .where(
+            Appointments.id == payload.appointment_id,
+            Appointments.cleaner_id == cleaner_id,
+        )
+        .values(
+            paid_amount_cents=payload.paid_amount_cents,
+            status=AppointmentStatus.COMPLETED,
+            next_occurence_at=case(
+                (
+                    Appointments.is_recurred == True,
+                    Appointments.date + timedelta(days=7),
                 ),
+                else_=None,
+            ),
+        )
+        .returning(Appointments)
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Couldn't find appointment"
+        )
+
+    return result
+
+
+async def fetch_cleaner_collected_money(cleaner_id: int, db: AsyncSession):
+    res = await fetch_user_by_id(cleaner_id, db)
+    await db.refresh(res, ["appointments_as_cleaner"])
+    return res.get_sum_of_collected_money_as_cleaner
+
+
+async def fetch_cleaner_collected_money_appointment_view(
+    cleaner_id: int, db: AsyncSession
+):
+    res = (
+        (
+            await db.execute(
+                select(
+                    Appointments.id,
+                    Appointments.cleaner_id,
+                    Appointments.paid_amount_cents,
+                ).where(Appointments.cleaner_id == cleaner_id)
             )
         )
-    ).all()
+        .mappings()
+        .all()
+    )
+    return res

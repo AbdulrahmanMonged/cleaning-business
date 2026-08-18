@@ -33,7 +33,7 @@ class Roles(Enum):
 
 class AppointmentStatus(Enum):
     SUBMITTED = "submitted"
-    CONFIRMED = "confirmed"
+    COMPLETED = "completed"
     ASSIGNED = "assigned"
     IN_PROGRESS = "in_progress"
     CANCELLED = "cancelled"
@@ -90,6 +90,17 @@ class User(AsyncAttrs, Base):
             for x in self.appointments_as_cleaner
         )
 
+    @hybrid_property
+    def get_sum_of_collected_money_as_cleaner(self):
+        if self.role is not Roles.CLEANER:
+            raise AttributeError("You can't access this attribute")
+
+        return sum([x.paid_amount_cents for x in self.appointments_as_cleaner])
+
+    # @get_sum_of_collected_money_as_cleaner.expression
+    # def get_sum_of_collected_money_as_cleaner(cls):
+    #     return exists(Appointments.paid_amount_cents).where(Appointments.cleaner_id == cls.id)
+
     @is_available.expression
     def is_available(cls):
         return ~exists().where(
@@ -119,7 +130,7 @@ class Appointments(AsyncAttrs, Base):
     )
     address: Mapped[str]
     apartment_size: Mapped[ApartmentSize]
-    paid_amount: Mapped[float | None] = mapped_column(nullable=True)
+    paid_amount_cents: Mapped[int | None] = mapped_column(nullable=True)
     createdAt: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -217,6 +228,7 @@ class RelatedAppointmentPublic(BaseModel):
     hours: int
     is_recurred: bool
     next_occurence_at: datetime | None
+    paid_amount_cents: int | None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -231,7 +243,7 @@ class AppointmentPublic(BaseModel):
     address: str
     apartment_size: ApartmentSize
     is_recurred: bool
-    paid_amount: float | None
+    paid_amount_cents: int | None
     createdAt: datetime
     updatedAt: datetime
     next_occurence_at: datetime | None
@@ -252,3 +264,18 @@ class UpdateAppointmentStatus(BaseModel):
 
 class AssignCleanerModel(BaseModel):
     cleaner_id: int
+
+
+class CollectMoneyModel(BaseModel):
+    paid_amount_cents: int = Field(ge=0)
+    appointment_id: int
+
+
+class CollectedMoneyResponse(BaseModel):
+    sum_of_money: int
+
+
+class CollectedMoneyCleanerAppointmentResponse(BaseModel):
+    appointment_id: int = Field(validation_alias="id")
+    cleaner_id: int
+    paid_amount_cents: int

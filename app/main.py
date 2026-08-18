@@ -5,12 +5,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.logging import configure_logging
 from app.lifespan import lifespan
 from app.api import main
+from app.middlewares.logging_middleware import StructLogMiddleware
 
 configure_logging()
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(main.router)
-
+app.add_middleware(StructLogMiddleware)
 
 @app.exception_handler(Exception)
 async def generic_server_exception_handler(req: Request, exc: Exception):

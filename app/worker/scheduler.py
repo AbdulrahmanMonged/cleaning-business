@@ -16,6 +16,7 @@ log = structlog.get_logger()
 async def create_next_occurence(appt: Appointments):
     new_instance = Appointments(
         customer_id=appt.customer_id,
+        cleaner_id=appt.cleaner_id,
         date=appt.date + timedelta(days=7),
         hours=appt.hours,
         is_recurred=appt.is_recurred,
@@ -31,7 +32,7 @@ async def process_recurring_appointments(session: AsyncSession):
         select(Appointments)
         .where(Appointments.is_recurred.is_(True))
         .where(Appointments.next_occurence_at.is_not(None))
-        .where(Appointments.status == AppointmentStatus.CONFIRMED)
+        .where(Appointments.status == AppointmentStatus.COMPLETED)
         .with_for_update(skip_locked=True)
         .limit(100)
     )
@@ -45,6 +46,7 @@ async def process_recurring_appointments(session: AsyncSession):
     await session.commit()
     return len(due)
 
+
 async def run_recurring_check():
     session_factory = async_sessionmaker(get_engine(), expire_on_commit=False)
     async with session_factory() as session:
@@ -53,6 +55,7 @@ async def run_recurring_check():
             log.info("recurring_check.completed", processed=count)
         except Exception:
             log.exception("recurring_check.failed")
+
 
 def build_scheduler():
     scheduler = AsyncIOScheduler(timezone="UTC")
@@ -63,7 +66,7 @@ def build_scheduler():
         max_instances=1,
         coalesce=True,
         misfire_grace_time=300,
-        next_run_time=datetime.now(timezone.utc)
+        next_run_time=datetime.now(timezone.utc),
     )
     return scheduler
 
@@ -79,7 +82,7 @@ async def main():
     await stop_event.wait()
     log.info("scheduler.shutting_down")
     schedulder.shutdown(True)
-    
-    
+
+
 if __name__ == "__main__":
     asyncio.run(main())

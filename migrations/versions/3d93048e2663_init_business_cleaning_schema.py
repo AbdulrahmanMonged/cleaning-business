@@ -21,7 +21,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 appointment_status = psql.ENUM(
     "SUBMITTED",
-    "CONFIRMED",
+    "COMPLETED",
     "IN_PROGRESS",
     "ASSIGNED",
     "CANCELLED",
@@ -77,7 +77,7 @@ def upgrade() -> None:
         sa.Column("is_recurred", sa.Boolean(), nullable=False),
         sa.Column("address", sa.String(), nullable=False),
         sa.Column("apartment_size", apartment_size, nullable=False),
-        sa.Column("paid_amount", sa.Float(), nullable=True),
+        sa.Column("paid_amount_cents", sa.Integer(), nullable=True),
         sa.Column("createdAt", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updatedAt", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
