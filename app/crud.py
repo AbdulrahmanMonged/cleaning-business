@@ -148,6 +148,7 @@ async def assign_cleaner_to_appointment(
         )
     fetched_appointment.cleaner_id = payload.cleaner_id
     fetched_appointment.status = AppointmentStatus.ASSIGNED
+    await db.refresh(fetched_appointment, ["cleaner"])
     return fetched_appointment
 
 

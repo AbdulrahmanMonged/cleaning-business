@@ -1,9 +1,10 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
 import signal
+from venv import logger
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 import structlog
 
@@ -18,6 +19,7 @@ async def create_next_occurence(appt: Appointments):
         customer_id=appt.customer_id,
         cleaner_id=appt.cleaner_id,
         date=appt.date + timedelta(days=7),
+        status=AppointmentStatus.ASSIGNED,
         hours=appt.hours,
         is_recurred=appt.is_recurred,
         parent_appointment_id=appt.id,
@@ -33,6 +35,7 @@ async def process_recurring_appointments(session: AsyncSession):
         .where(Appointments.is_recurred.is_(True))
         .where(Appointments.next_occurence_at.is_not(None))
         .where(Appointments.status == AppointmentStatus.COMPLETED)
+        .where(~Appointments.child_appointments.any())
         .with_for_update(skip_locked=True)
         .limit(100)
     )
@@ -40,7 +43,6 @@ async def process_recurring_appointments(session: AsyncSession):
     new_instances = []
     for appt in due:
         new_instance = await create_next_occurence(appt)
-        appt.next_occurence_at += timedelta(days=7)
         new_instances.append(new_instance)
     session.add_all(new_instances)
     await session.commit()

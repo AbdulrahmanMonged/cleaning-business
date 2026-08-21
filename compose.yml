@@ -67,6 +67,8 @@ services:
     build: *app-build
     container_name: scheduler-cleaner
     command: python -m app.worker.scheduler
+    volumes:
+      - ./app/worker/scheduler.py:/code/app/worker/scheduler.py
     env_file:
       - .env
     depends_on:

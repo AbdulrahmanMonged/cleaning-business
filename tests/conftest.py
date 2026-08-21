@@ -5,13 +5,11 @@ from httpx import ASGITransport, AsyncClient
 import pytest
 import pytest_asyncio
 from sqlalchemy import make_url, text
-from testcontainers.postgres import PostgresContainer
-from testcontainers.redis import RedisContainer
-
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from testcontainers.community.postgres import PostgresContainer
+from testcontainers.community.redis import RedisContainer
 from alembic.config import Config
 from alembic import command
-
-
 
 
 def run_migrations(db_url: str):
@@ -62,12 +60,23 @@ async def client(app):
         ) as async_client:
             yield async_client
 
-@pytest_asyncio.fixture(autouse=True, loop_scope="session")
-async def _clean_db(client):
-    yield
-    from app.core.db import get_engine
-    engine = get_engine()
-    async with engine.begin() as conn:
-        await conn.execute(
-            text('TRUNCATE TABLE "user", "appointments" RESTART IDENTITY CASCADE')
-        )
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def db_client(service_urls):
+    engine = create_async_engine(service_urls["database_url"])
+    factory_session = async_sessionmaker(engine, autoflush=False)
+    async with factory_session() as session:
+        yield session
+    await engine.dispose()
+
+
+# @pytest_asyncio.fixture(autouse=True, loop_scope="session")
+# async def _clean_db(client):
+#     yield
+#     from app.core.db import get_engine
+
+#     engine = get_engine()
+#     async with engine.begin() as conn:
+#         await conn.execute(
+#             text('TRUNCATE TABLE "users", "appointments" RESTART IDENTITY CASCADE')
+#         )
