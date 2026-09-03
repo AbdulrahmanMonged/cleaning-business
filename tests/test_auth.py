@@ -1,40 +1,18 @@
-import pytest_asyncio
 from httpx import AsyncClient
+import structlog
 
 
+logger = structlog.get_logger()
+TEST_USER = {"name": "test_user123", "password": "test_user", "confirm_password": "test_user"}
 
-TEST_USER = {"name": "test-123", "password": "test-123", "confirm_password": "test-123"}
-
-
-@pytest_asyncio.fixture(loop_scope="session")
-async def registered_user(client: AsyncClient) -> dict:
+async def test_register(client: AsyncClient, auth_headers_map):
     response = await client.post("/v1/auth/register", json=TEST_USER)
-    assert response.status_code == 201
-    return response.json()
-
-
-@pytest_asyncio.fixture(loop_scope="session")
-async def auth_headers(client: AsyncClient, registered_user: dict) -> dict:
-    response = await client.post(
-        "/v1/auth/login",
-        data={"username": TEST_USER["name"], "password": TEST_USER["password"]},
-    )
-    assert response.status_code == 200
     data = response.json()
-    return {"Authorization": f"{data['token_type']} {data['access_token']}"}
-
-
-async def test_register(client: AsyncClient):
-    from app.models import UserCreate
-    valid_user = UserCreate(**TEST_USER)
-    response = await client.post("/v1/auth/register", json=valid_user.model_dump())
-    data = response.json()
+    logger.warn(register_response=data)
     assert response.status_code == 201
-    assert data["name"] == valid_user.name
-    assert data["role"] == "user"
 
 
-async def test_login_fails_with_wrong_password(client: AsyncClient, registered_user):
+async def test_login_fails_with_wrong_password(client: AsyncClient):
     response = await client.post(
         "/v1/auth/login",
         data={"username": TEST_USER["name"], "password": "wrong-password"},
@@ -44,7 +22,7 @@ async def test_login_fails_with_wrong_password(client: AsyncClient, registered_u
     assert data["message"] == "Could not validate credentials"
 
 
-async def test_login_succeeds(client: AsyncClient, registered_user):
+async def test_login_succeeds(client: AsyncClient):
     response = await client.post(
         "/v1/auth/login",
         data={"username": TEST_USER["name"], "password": TEST_USER["password"]},
@@ -62,9 +40,12 @@ async def test_me_requires_auth(client: AsyncClient):
     assert data["message"] == "Not authenticated"
 
 
-async def test_me_returns_current_user(client: AsyncClient, auth_headers):
-    response = await client.get("/v1/auth/me", headers=auth_headers)
+async def test_me_returns_current_user(client: AsyncClient, auth_headers_map: dict):
+    admin_user = {"name": "admin", "role": "admin"}
+    response = await client.get(
+        "/v1/auth/me", headers=auth_headers_map[admin_user["name"]]
+    )
     data = response.json()
     assert response.status_code == 200
-    assert data["name"] == TEST_USER["name"]
-    assert data["role"] == "user"
+    assert data["name"] == admin_user["name"]
+    assert data["role"] == admin_user["role"]

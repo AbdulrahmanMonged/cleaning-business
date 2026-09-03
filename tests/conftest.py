@@ -1,15 +1,21 @@
+import asyncio
 import os
 
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 import pytest
 import pytest_asyncio
-from sqlalchemy import make_url, text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy import make_url, select, text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+import structlog
 from testcontainers.community.postgres import PostgresContainer
 from testcontainers.community.redis import RedisContainer
 from alembic.config import Config
 from alembic import command
+
+from app.models import Roles, User
+
+logger = structlog.get_logger()
 
 
 def run_migrations(db_url: str):
@@ -27,6 +33,7 @@ def service_urls():
         postgres_url = make_url(postgres.get_connection_url())
         redis_host = redis.get_container_host_ip()
         redis_port = redis.get_exposed_port(6379)
+        os.environ["TEST_ENV"] = str(True)
         os.environ["DB_HOST"] = str(postgres_url.host)
         os.environ["DB_USER"] = str(postgres_url.username)
         os.environ["DB_PASSWORD"] = str(postgres_url.password)
@@ -70,13 +77,76 @@ async def db_client(service_urls):
     await engine.dispose()
 
 
-# @pytest_asyncio.fixture(autouse=True, loop_scope="session")
-# async def _clean_db(client):
-#     yield
-#     from app.core.db import get_engine
+USERS = {
+    "manager": {"name": "manager", "password": "manager", "role": Roles.MANAGER},
+    "customer1": {"name": "customer1", "password": "customer1", "role": Roles.CUSTOMER},
+    "customer2": {"name": "customer2", "password": "customer2", "role": Roles.CUSTOMER},
+    "cleaner1": {"name": "cleaner1", "password": "cleaner1", "role": Roles.CLEANER},
+    "cleaner2": {"name": "cleaner2", "password": "cleaner2", "role": Roles.CLEANER},
+    "admin": {"name": "admin", "password": "admin", "role": Roles.ADMIN},
+    "user": {"name": "user", "password": "user", "role": Roles.USER},
+}
 
-#     engine = get_engine()
-#     async with engine.begin() as conn:
-#         await conn.execute(
-#             text('TRUNCATE TABLE "users", "appointments" RESTART IDENTITY CASCADE')
-#         )
+
+async def bulk_insert_users(db_client: AsyncSession, users):
+    serialized_users = [User(**USERS[data]) for data in USERS]
+    db_client.add_all(serialized_users)
+    await db_client.commit()
+
+
+async def bulk_register_async(db_client: AsyncSession):
+    global USERS
+
+    await bulk_insert_users(db_client, USERS)
+
+    all_users = (
+        (
+            await db_client.execute(
+                select(User.name, User.role, User.id).order_by(User.id)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    for item in all_users:
+        USERS[item.name]["id"] = item.id
+
+    assert all(
+        (
+            all_users[i].name == USERS[all_users[i].name]["name"]
+            and all_users[i].role == USERS[all_users[i].name]["role"]
+        )
+        for i in range(len(all_users))
+    )
+    logger.info(users=USERS)
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def auth_headers_map(client: AsyncClient, db_client: AsyncSession):
+    await bulk_register_async(db_client)
+    headers_map = {}
+
+    async def login_and_store(client: AsyncClient, user):
+        response = await client.post(
+            "/v1/auth/login",
+            data={"username": user["name"], "password": user["password"]},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        headers_map[user["name"]] = {
+            "Authorization": f"{data['token_type']} {data['access_token']}"
+        }
+
+    tasks = [login_and_store(client, USERS[user]) for user in USERS]
+    await asyncio.gather(*tasks)
+
+    return headers_map
+
+
+@pytest_asyncio.fixture(autouse=True, scope="module", loop_scope="session")
+async def _clean_db(db_client: AsyncSession):
+    yield
+    await db_client.execute(
+        text('TRUNCATE TABLE "appointments" RESTART IDENTITY CASCADE')
+    )
+    await db_client.commit()

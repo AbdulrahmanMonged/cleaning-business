@@ -88,7 +88,7 @@ class RoleChecker:
         if matches == []:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You're not llowed to access this endpoint",
+                detail="You're not allowed to access this endpoint",
             )
         return current_user
 

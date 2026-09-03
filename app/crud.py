@@ -23,7 +23,7 @@ from app.models import (
 )
 
 RANDOM_HASH = "$argon2i$v=19$m=16,t=2,p=1$YXNkYXNkYXM$AVBfoT4P1h879+Muu0tCxQ"
-log = structlog.get_logger()
+logger = structlog.get_logger()
 
 
 async def create_user(user: UserCreate, db: AsyncSession):
@@ -31,9 +31,9 @@ async def create_user(user: UserCreate, db: AsyncSession):
         new_user = User(name=user.name, password=user.password)
         db.add(new_user)
         await db.flush()
-        await db.refresh(new_user, ["role", "createdAt", "name"])
         return new_user
-    except IntegrityError:
+    except IntegrityError as e:
+        logger.warn(err=e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="User already exists"
         )
@@ -130,9 +130,33 @@ async def fetch_appointment_by_id(appointment_id: int, db: AsyncSession):
 
 
 async def update_appointment_status(
-    update_model: UpdateAppointmentStatus, appointment_id: int, db: AsyncSession
+    update_model: UpdateAppointmentStatus,
+    appointment_id: int,
+    db: AsyncSession,
+    customer_id: int | None = None,
+    cleaner_id: int | None = None,
 ):
     selected_model = await fetch_appointment_by_id(appointment_id, db)
+    if customer_id is not None:
+        if selected_model.customer_id != customer_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You're not allowed to update this appointment",
+            )
+        if selected_model.status in [
+            AppointmentStatus.IN_PROGRESS,
+            AppointmentStatus.COMPLETED,
+        ]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"You cant cancel a {selected_model.status.value} appointment",
+            )
+    if cleaner_id is not None:
+        if selected_model.cleaner_id is None or selected_model.cleaner_id != cleaner_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You're not allowed to update this appointment",
+            )
     selected_model.status = update_model.new_status
     return selected_model
 
@@ -176,16 +200,18 @@ async def get_cleaner_appointments(
     return (await db.scalars(statement)).all()
 
 
-async def cleaner_collect_money(
-    cleaner_id: int, payload: CollectMoneyModel, db: AsyncSession
+async def collect_money(
+    payload: CollectMoneyModel,
+    db: AsyncSession,
+    cleaner_id: int = None,
 ):
+    statement = update(Appointments).where(
+        Appointments.id == payload.appointment_id,
+    )
+    if cleaner_id is not None:
+        statement = statement.where(Appointments.cleaner_id == cleaner_id)
     result = await db.scalar(
-        update(Appointments)
-        .where(
-            Appointments.id == payload.appointment_id,
-            Appointments.cleaner_id == cleaner_id,
-        )
-        .values(
+        statement.values(
             paid_amount_cents=payload.paid_amount_cents,
             status=AppointmentStatus.COMPLETED,
             next_occurence_at=case(
@@ -195,14 +221,12 @@ async def cleaner_collect_money(
                 ),
                 else_=None,
             ),
-        )
-        .returning(Appointments)
+        ).returning(Appointments)
     )
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Couldn't find appointment"
         )
-
     return result
 
 

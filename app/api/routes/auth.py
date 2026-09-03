@@ -8,18 +8,18 @@ from app.api.debs import db_dependency, user_dependency
 from app.core.config import get_settings
 from app.core.security import create_access_token
 from app.crud import create_user, login_user
-from app.models import TokenResponse, UserCreate, UserPublic
+from app.models import GenericResponse, TokenResponse, UserCreate, UserPublic
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 log = structlog.get_logger()
 
 
 @router.post(
-    "/register", status_code=status.HTTP_201_CREATED, response_model=UserPublic
+    "/register", status_code=status.HTTP_201_CREATED, response_model=GenericResponse
 )
 async def register_user(user: UserCreate, db: db_dependency):
-    created_user = await create_user(user, db)
-    return created_user
+    await create_user(user, db)
+    return {"message": "user has been created successfully"}
 
 
 @router.post("/login")

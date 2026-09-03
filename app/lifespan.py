@@ -47,7 +47,7 @@ async def insert_admin_user(db: AsyncSession, settings: Settings):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
-    if settings.ENV == "development":
+    if settings.ENV == "development" and not settings.TEST_ENV:
         session_factory = async_sessionmaker(get_engine(), expire_on_commit=False)
         async with session_factory() as session:
             await insert_admin_user(session, settings)

@@ -95,7 +95,13 @@ class User(AsyncAttrs, Base):
         if self.role is not Roles.CLEANER:
             raise AttributeError("You can't access this attribute")
 
-        return sum([x.paid_amount_cents for x in self.appointments_as_cleaner])
+        return sum(
+            [
+                x.paid_amount_cents
+                for x in self.appointments_as_cleaner
+                if x.paid_amount_cents is not None
+            ]
+        )
 
     # @get_sum_of_collected_money_as_cleaner.expression
     # def get_sum_of_collected_money_as_cleaner(cls):
@@ -217,7 +223,7 @@ class TokenResponse(BaseModel):
 class AppointmentCreateModel(BaseModel):
     date: datetime
     hours: int = Field(gt=0)
-    address: str = Field(min_length=6)
+    address: str = Field(min_length=3)
     apartment_size: ApartmentSize
 
 
@@ -272,10 +278,25 @@ class CollectMoneyModel(BaseModel):
 
 
 class CollectedMoneyResponse(BaseModel):
-    sum_of_money: int
+    sum_of_money: float | int | None
+
+    @field_serializer("sum_of_money")
+    def sum_of_money_serializer(self, val: int | float | None):
+        if val is None:
+            return 0
+        return val / 1000
 
 
 class CollectedMoneyCleanerAppointmentResponse(BaseModel):
     appointment_id: int = Field(validation_alias="id")
     cleaner_id: int
-    paid_amount_cents: int
+    paid_amount: float | int | None = Field(validation_alias="paid_amount_cents")
+
+    @field_serializer("paid_amount")
+    def sum_of_money_serializer(self, val: int | float | None):
+        if val is None:
+            return 0
+        return val / 1000
+
+class GenericResponse(BaseModel):
+    message: str

@@ -1,3 +1,4 @@
+import json
 import time
 import uuid
 
@@ -13,11 +14,18 @@ class StructLogMiddleware(BaseHTTPMiddleware):
         structlog.contextvars.clear_contextvars()
 
         request_id = str(uuid.uuid4())
+        req_body = await request.body()
+
         structlog.contextvars.bind_contextvars(
             request_id=request_id,
             method=request.method,
             path=request.url.path,
+            request_body=req_body.decode("utf-8") if req_body else {},
+            query_params=dict(request.query_params),
+            ip=request.client.host,
+            user_agent=request.headers.get("user-agent")
         )
+
 
         start_time = time.perf_counter()
         try:

@@ -1,23 +1,25 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Path, status
 import structlog
 
 from app.api.debs import role_dependency, db_dependency
 from app.crud import (
-    cleaner_collect_money,
+    collect_money,
     fetch_all_available_clenaers,
     get_cleaner_appointments,
+    update_appointment_status,
 )
 from app.models import (
     AppointmentStatus,
     CollectMoneyModel,
     RelatedAppointmentPublic,
     Roles,
+    UpdateAppointmentStatus,
     UserPublic,
 )
 
-log = structlog.get_logger()
+logger = structlog.get_logger()
 router = APIRouter(
     prefix="/cleaner",
     tags=["cleaner"],
@@ -31,18 +33,12 @@ async def test_cleaner(
     return UserPublic.model_validate(user)
 
 
-@router.get("/available-cleaners", response_model=list[UserPublic])
-async def get_available_cleaners(
-    db: db_dependency, role: role_dependency[Roles.MANAGER]
-):
-    available_cleaners = await fetch_all_available_clenaers(db)
-    return available_cleaners
-
 
 @router.get("/tasks", response_model=list[RelatedAppointmentPublic])
 async def get_assigned_cleaning_tasks(
     user: role_dependency[Roles.CLEANER], db: db_dependency
 ):
+
     return await get_cleaner_appointments(user.id, db, AppointmentStatus.ASSIGNED)
 
 
@@ -54,10 +50,25 @@ async def get_all_related_appointments(
 
 
 @router.post("/collect-money", response_model=RelatedAppointmentPublic)
-async def post_collect_money(
-    user: role_dependency[Roles.CLEANER, Roles.MANAGER],
+async def cleaner_post_collect_money(
+    user: role_dependency[Roles.CLEANER],
     db: db_dependency,
     payload: CollectMoneyModel,
 ):
-    result = await cleaner_collect_money(user.id, payload, db)
+    result = await collect_money(cleaner_id=user.id, payload=payload, db=db)
+    return result
+
+
+@router.post(
+    "/{appointment_id}/start-appointment", response_model=RelatedAppointmentPublic
+)
+async def cleaner_cancel_appointment(
+    user: role_dependency[Roles.CLEANER],
+    db: db_dependency,
+    appointment_id: int = Path(ge=0),
+):
+    payload = UpdateAppointmentStatus(new_status=AppointmentStatus.IN_PROGRESS)
+    result = await update_appointment_status(
+        payload, appointment_id, db, cleaner_id=user.id
+    )
     return result

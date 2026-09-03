@@ -1,20 +1,16 @@
-import asyncio
+from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ApartmentSize, AppointmentStatus, Appointments, Roles, User
+from app.models import ApartmentSize, AppointmentStatus, Appointments
 from app.worker.scheduler import process_recurring_appointments
+from tests.conftest import USERS
 
 current_date = datetime.now(timezone.utc)
-USERS = [
-    {"id": 1, "name": "customer", "_hash_password": "customer", "role": Roles.CUSTOMER},
-    {"id": 2, "name": "cleaner", "_hash_password": "cleaner", "role": Roles.CLEANER},
-]
+
 APPOINTMENT_ROW = {
-    "cleaner_id": 2,
-    "customer_id": 1,
     "status": AppointmentStatus.COMPLETED,
     "date": current_date,
     "hours": 1,
@@ -27,8 +23,8 @@ APPOINTMENT_ROW = {
 
 
 async def test_db(db_client: AsyncSession):
-    usr_statement = insert(User).returning(User)
-    usr_results = (await db_client.scalars(usr_statement, USERS)).all()
+    APPOINTMENT_ROW["cleaner_id"] = USERS["cleaner1"]["id"]
+    APPOINTMENT_ROW["customer_id"] = USERS["customer1"]["id"]
     appt_statement = insert(Appointments).returning(Appointments)
     appt_results = await db_client.scalar(appt_statement, APPOINTMENT_ROW)
     assert appt_results is not None

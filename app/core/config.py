@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str = "admin"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     ENV: Literal["development", "staging", "production"] = "development"
+    TEST_ENV: bool = False
 
     @property
     def DB_URL(self):
