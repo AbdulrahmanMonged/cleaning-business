@@ -13,7 +13,7 @@ from app.models import (
     Roles,
 )
 
-log = structlog.get_logger()
+logger = structlog.get_logger()
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
 
@@ -23,7 +23,8 @@ async def create_appointment(
     user: role_dependency[Roles.CUSTOMER],
     db: db_dependency,
 ):
-    return await insert_appointment(appointment=appointment, user=user, db=db)
+    logger.warn(user=user)
+    return await insert_appointment(appointment=appointment, user_id=user.id, db=db)
 
 
 @router.get("", response_model=list[AppointmentPublic])

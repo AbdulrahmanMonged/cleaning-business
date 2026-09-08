@@ -34,6 +34,7 @@ async def get_available_cleaners(client: AsyncClient, manager_headers):
 
 
 async def test_appointment_submission(client: AsyncClient, auth_headers_map):
+    logger.warn(auth_headers_map)
     api = APPOINTMENTS_API
     customer1_submission = await client.post(
         api,

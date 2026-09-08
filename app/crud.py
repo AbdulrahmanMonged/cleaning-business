@@ -43,7 +43,7 @@ async def login_user(form: UserLogin, db: AsyncSession):
     fetched_user = await db.scalar(select(User).where(User.name == form.username))
     if fetched_user is None:
         verify_password(form.password, RANDOM_HASH)
-        return None
+        return Nones
     result, updated_hash = verify_password(form.password, fetched_user._hash_password)
     if not result:
         return None
@@ -54,11 +54,11 @@ async def login_user(form: UserLogin, db: AsyncSession):
 
 async def insert_appointment(
     appointment: AppointmentCreateModel,
-    user: UserPublic,
+    user_id: UserPublic,
     db: AsyncSession,
 ):
     new_model = Appointments(
-        customer_id=user.id,
+        customer_id=user_id,
         date=appointment.date,
         hours=appointment.hours,
         address=appointment.address,
@@ -67,6 +67,7 @@ async def insert_appointment(
     )
     db.add(new_model)
     await db.flush()
+    await db.refresh(new_model, ["customer"])
     return new_model
 
 

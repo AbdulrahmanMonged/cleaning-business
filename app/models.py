@@ -65,11 +65,13 @@ class User(AsyncAttrs, Base):
         back_populates="cleaner",
         cascade="all, delete-orphan",
         foreign_keys="Appointments.cleaner_id",
+        lazy="selectin",
     )
     appointments_as_customer: Mapped[list["Appointments"]] = relationship(
         back_populates="customer",
         cascade="all, delete-orphan",
         foreign_keys="Appointments.customer_id",
+        lazy="selectin",
     )
 
     @hybrid_property

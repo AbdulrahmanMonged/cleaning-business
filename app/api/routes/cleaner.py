@@ -26,14 +26,6 @@ router = APIRouter(
 )
 
 
-@router.get("")
-async def test_cleaner(
-    user: role_dependency[Roles.CLEANER,],
-):
-    return UserPublic.model_validate(user)
-
-
-
 @router.get("/tasks", response_model=list[RelatedAppointmentPublic])
 async def get_assigned_cleaning_tasks(
     user: role_dependency[Roles.CLEANER], db: db_dependency

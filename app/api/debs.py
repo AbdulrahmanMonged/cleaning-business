@@ -51,27 +51,19 @@ async def get_current_user(session: db_dependency, token: token_dependency):
         token_data = TokenPayload(**payload)
     except jwt.InvalidTokenError, ValidationError:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
         )
 
     user = await session.scalar(select(User).where(User.name == token_data.sub))
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
         )
-    await session.refresh(
-        user,
-        [
-            "role",
-            #    "appointments_as_cleaner",
-            #    "appointments_as_customer"
-        ],
-    )
-    return user
+    return UserPublic.model_validate(user)
 
 
-user_dependency = Annotated[User, Depends(get_current_user)]
+user_dependency = Annotated[UserPublic, Depends(get_current_user)]
 
 
 class RoleChecker:

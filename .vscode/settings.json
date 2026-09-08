@@ -1,6 +1,3 @@
 {
-  "python.analysis.diagnosticSeverityOverrides": {
-    "reportInvalidTypeForm": "none"
-  },
-  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python"
+  "python.defaultInterpreterPath": "${workspaceFolder}/venv/bin/python"
 }
