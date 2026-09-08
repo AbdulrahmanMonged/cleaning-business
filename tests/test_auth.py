@@ -25,7 +25,8 @@ async def test_login_fails_with_wrong_password(client: AsyncClient):
     assert response.status_code == 401
     assert data["message"] == "Could not validate credentials"
 
-async def test_login_succeeds(client: AsyncClient):
+
+async def test_login_succeeds(client: AsyncClient, registered_user):
     response = await client.post(
         "/v1/auth/login",
         data={"username": TEST_USER["name"], "password": TEST_USER["password"]},
