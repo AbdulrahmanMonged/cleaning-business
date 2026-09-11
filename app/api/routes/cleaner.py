@@ -12,6 +12,7 @@ from app.crud import (
 )
 from app.models import (
     AppointmentStatus,
+    CleanerCollectMoneyModel,
     CollectMoneyModel,
     RelatedAppointmentPublic,
     Roles,
@@ -41,13 +42,22 @@ async def get_all_related_appointments(
     return await get_cleaner_appointments(user.id, db=db)
 
 
-@router.post("/collect-money", response_model=RelatedAppointmentPublic)
+@router.post(
+    "/collect-money",
+    response_model=RelatedAppointmentPublic,
+    response_model_exclude={"cleaner_id"},
+)
 async def cleaner_post_collect_money(
     user: role_dependency[Roles.CLEANER],
     db: db_dependency,
-    payload: CollectMoneyModel,
+    payload: CleanerCollectMoneyModel,
 ):
-    result = await collect_money(cleaner_id=user.id, payload=payload, db=db)
+    new_payload = CollectMoneyModel(
+        appointment_id=payload.appointment_id,
+        paid_amount_cents=payload.paid_amount_cents,
+        cleaner_id=user.id,
+    )
+    result = await collect_money(payload=new_payload, db=db)
     return result
 
 

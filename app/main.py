@@ -13,6 +13,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(main.router)
 app.add_middleware(StructLogMiddleware)
 
+
 @app.exception_handler(Exception)
 async def generic_server_exception_handler(req: Request, exc: Exception):
     return JSONResponse(

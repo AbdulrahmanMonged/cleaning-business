@@ -13,7 +13,7 @@ current_date = datetime.now(timezone.utc)
 
 logger = structlog.get_logger()
 APPOINTMENT_ROW = {
-    "status": AppointmentStatus.ASSIGNED,
+    "status": AppointmentStatus.IN_PROGRESS,
     "date": current_date,
     "hours": 1,
     "is_recurred": False,
@@ -49,11 +49,11 @@ async def test_collect_money_wrong_cleaner(
             "appointment_id": APPOINTMENT_ROW["appointment_id"],
         },
     )
-    assert response.status_code == 404
+    assert response.status_code == 403
 
 
 async def test_collect_money_cleaner(client: AsyncClient, auth_headers_map):
-    random_paid_amount = random.randint(100000000, 999999999)
+    random_paid_amount = random.randint(10000, 99999)
     response = await client.post(
         "/v1/cleaner/collect-money",
         headers=auth_headers_map["cleaner1"],

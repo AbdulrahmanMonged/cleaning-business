@@ -83,7 +83,7 @@ class User(AsyncAttrs, Base):
         self._hash_password = get_password_hash(value)
 
     @hybrid_property
-    def is_available(self):
+    def is_available(self): # pyright: ignore[reportRedeclaration]
         if self.role is not Roles.CLEANER:
             raise AttributeError("You can't access this attribute")
 
@@ -274,9 +274,15 @@ class AssignCleanerModel(BaseModel):
     cleaner_id: int
 
 
+class CleanerCollectMoneyModel(BaseModel):
+    paid_amount_cents: int = Field(ge=0)
+    appointment_id: int
+
+
 class CollectMoneyModel(BaseModel):
     paid_amount_cents: int = Field(ge=0)
     appointment_id: int
+    cleaner_id: int
 
 
 class CollectedMoneyResponse(BaseModel):

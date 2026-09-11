@@ -43,7 +43,7 @@ async def login_user(form: UserLogin, db: AsyncSession):
     fetched_user = await db.scalar(select(User).where(User.name == form.username))
     if fetched_user is None:
         verify_password(form.password, RANDOM_HASH)
-        return Nones
+        return None
     result, updated_hash = verify_password(form.password, fetched_user._hash_password)
     if not result:
         return None
@@ -204,30 +204,30 @@ async def get_cleaner_appointments(
 async def collect_money(
     payload: CollectMoneyModel,
     db: AsyncSession,
-    cleaner_id: int = None,
 ):
-    statement = update(Appointments).where(
-        Appointments.id == payload.appointment_id,
+    statement = (
+        select(Appointments)
+        .where(
+            Appointments.id == payload.appointment_id,
+        )
+        .with_for_update(skip_locked=True)
     )
-    if cleaner_id is not None:
-        statement = statement.where(Appointments.cleaner_id == cleaner_id)
     result = await db.scalar(
-        statement.values(
-            paid_amount_cents=payload.paid_amount_cents,
-            status=AppointmentStatus.COMPLETED,
-            next_occurence_at=case(
-                (
-                    Appointments.is_recurred == True,
-                    Appointments.date + timedelta(days=7),
-                ),
-                else_=None,
-            ),
-        ).returning(Appointments)
+        statement
     )
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Couldn't find appointment"
         )
+    if result.status != AppointmentStatus.IN_PROGRESS:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can't collect a money for non in-progress appointment")
+
+    if result.cleaner_id != payload.cleaner_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This cleaner is not the one who's assigned to this appointment")
+    result.paid_amount_cents = payload.paid_amount_cents
+    result.status = AppointmentStatus.COMPLETED
+    if result.is_recurred:
+        result.next_occurence_at = result.date + timedelta(days=7)
     return result
 
 
