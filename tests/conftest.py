@@ -15,6 +15,10 @@ from alembic import command
 
 from app.models import Roles, User
 
+MANAGER_API = "/v1/manager"
+APPOINTMENTS_API = "/v1/appointments"
+CLEANER_API = "/v1/cleaner"
+CUSTOMER_API = "/v1/customer"
 logger = structlog.get_logger()
 
 

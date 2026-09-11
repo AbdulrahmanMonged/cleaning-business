@@ -6,13 +6,10 @@ from httpx import AsyncClient
 import structlog
 
 from app.models import ApartmentSize, AppointmentStatus
+from tests.conftest import APPOINTMENTS_API, CLEANER_API, CUSTOMER_API, MANAGER_API
 
 appointments = {}
 
-MANAGER_API = "/v1/manager"
-APPOINTMENTS_API = "/v1/appointments"
-CLEANER_API = "/v1/cleaner"
-CUSTOMER_API = "/v1/customer"
 logger = structlog.get_logger()
 
 
