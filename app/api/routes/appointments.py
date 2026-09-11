@@ -29,7 +29,7 @@ async def create_appointment(
 
 @router.get("", response_model=list[AppointmentPublic])
 async def get_all_appointments_by_status(
-    user: role_dependency[Roles.CUSTOMER, Roles.MANAGER],
+    user: role_dependency[Roles.MANAGER],
     db: db_dependency,
     status: AppointmentStatus = Query(None),
 ):
@@ -38,7 +38,7 @@ async def get_all_appointments_by_status(
 
 @router.get("/{appointment_id}", response_model=AppointmentPublic)
 async def get_appointment_by_id(
-    user: role_dependency[Roles.CUSTOMER, Roles.MANAGER],
+    user: role_dependency[Roles.MANAGER],
     db: db_dependency,
     appointment_id: int = Path(..., ge=0),
 ):

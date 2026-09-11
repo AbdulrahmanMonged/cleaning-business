@@ -143,7 +143,7 @@ async def test_verify_manager_collect_money(
 
     assert (
         sum(item["paid_amount"] for item in resp_body)
-        == APPOINTMENTS_ROWS[0]["paid_amount_cents"] / 1000
+        == APPOINTMENTS_ROWS[0]["paid_amount_cents"] / 100
     )
 
 

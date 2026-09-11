@@ -87,6 +87,7 @@ async def get_all_users_by_role(db: AsyncSession, role: Roles | None = None):
         statement = statement.where(User.role == role)
     scalar_results = await db.scalars(statement)
     results = scalar_results.all()
+    return results
 
 
 async def fetch_all_available_clenaers(db: AsyncSession):
@@ -201,6 +202,11 @@ async def get_cleaner_appointments(
     return (await db.scalars(statement)).all()
 
 
+async def get_customer_appointments(customer_id: int, db: AsyncSession):
+    statement = select(Appointments).where(Appointments.customer_id == customer_id)
+    return (await db.scalars(statement)).all()
+
+
 async def collect_money(
     payload: CollectMoneyModel,
     db: AsyncSession,
@@ -212,18 +218,22 @@ async def collect_money(
         )
         .with_for_update(skip_locked=True)
     )
-    result = await db.scalar(
-        statement
-    )
+    result = await db.scalar(statement)
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Couldn't find appointment"
         )
     if result.status != AppointmentStatus.IN_PROGRESS:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can't collect a money for non in-progress appointment")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can't collect a money for non in-progress appointment",
+        )
 
     if result.cleaner_id != payload.cleaner_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This cleaner is not the one who's assigned to this appointment")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This cleaner is not the one who's assigned to this appointment",
+        )
     result.paid_amount_cents = payload.paid_amount_cents
     result.status = AppointmentStatus.COMPLETED
     if result.is_recurred:

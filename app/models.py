@@ -292,7 +292,7 @@ class CollectedMoneyResponse(BaseModel):
     def sum_of_money_serializer(self, val: int | float | None):
         if val is None:
             return 0
-        return val / 1000
+        return val / 100
 
 
 class CollectedMoneyCleanerAppointmentResponse(BaseModel):
@@ -304,7 +304,7 @@ class CollectedMoneyCleanerAppointmentResponse(BaseModel):
     def sum_of_money_serializer(self, val: int | float | None):
         if val is None:
             return 0
-        return val / 1000
+        return val / 100
 
 class GenericResponse(BaseModel):
     message: str

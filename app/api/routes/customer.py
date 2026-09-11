@@ -8,7 +8,7 @@ from app.models import (
     UpdateAppointmentStatus,
 )
 from app.api.debs import role_dependency, db_dependency
-from app.crud import update_appointment_status
+from app.crud import get_customer_appointments, update_appointment_status
 
 log = structlog.get_logger()
 
@@ -28,3 +28,10 @@ async def customer_cancel_appointment(
         payload, appointment_id, db, customer_id=user.id
     )
     return result
+
+
+@router.get("/related-appointments", response_model=list[RelatedAppointmentPublic])
+async def get_all_customer_related_appointments(
+    user: role_dependency[Roles.CUSTOMER], db: db_dependency
+):
+    return await get_customer_appointments(user.id, db=db)
