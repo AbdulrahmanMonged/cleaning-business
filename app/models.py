@@ -11,7 +11,7 @@ from pydantic import (
     field_serializer,
     field_validator,
 )
-from sqlalchemy import DateTime, ForeignKey, and_, exists
+from sqlalchemy import DateTime, ForeignKey, Index, and_, exists
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -83,7 +83,7 @@ class User(AsyncAttrs, Base):
         self._hash_password = get_password_hash(value)
 
     @hybrid_property
-    def is_available(self): # pyright: ignore[reportRedeclaration]
+    def is_available(self):  # pyright: ignore[reportRedeclaration]
         if self.role is not Roles.CLEANER:
             raise AttributeError("You can't access this attribute")
 
@@ -170,6 +170,11 @@ class Appointments(AsyncAttrs, Base):
         lazy="selectin",
         foreign_keys=[parent_appointment_id],
         join_depth=1,
+    )
+
+    __table_args__ = (
+        Index("ix_cleaner_id_status", "cleaner_id", "status"),
+        Index("ix_customer_id", "customer_id"),
     )
 
     @hybrid_property
@@ -305,6 +310,7 @@ class CollectedMoneyCleanerAppointmentResponse(BaseModel):
         if val is None:
             return 0
         return val / 100
+
 
 class GenericResponse(BaseModel):
     message: str
