@@ -13,12 +13,12 @@ class Settings(BaseSettings):
     REDIS_HOST: str
     REDIS_PORT: int
 
-    JWT_SECRET: str = "test-secret-do-not-use-elsewhere"
+    JWT_SECRET: str
     JWT_EXPIRATION_IN_MINUTES: int = 15
     JWT_ALGORITHM: str = "HS256"
 
-    ADMIN_USER: str = "admin"
-    ADMIN_PASSWORD: str = "admin"
+    ADMIN_USER: str
+    ADMIN_PASSWORD: str
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     ENV: Literal["development", "staging", "production"] = "development"
     TEST_ENV: bool = False

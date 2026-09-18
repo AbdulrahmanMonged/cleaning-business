@@ -1,5 +1,6 @@
 import asyncio
 import os
+import secrets
 
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
@@ -46,6 +47,10 @@ def service_urls():
 
         os.environ["REDIS_HOST"] = str(redis_host)
         os.environ["REDIS_PORT"] = str(redis_port)
+
+        os.environ["ADMIN_USER"] = "admin"
+        os.environ["ADMIN_PASSWORD"] = "admin"
+        os.environ["JWT_SECRET"] = str(secrets.token_hex(32))
 
         redis_url = f"redis://{redis_host}:{redis_port}/0"
 

@@ -178,7 +178,7 @@ async def test_manager_collect_money_wrong_cleaner(
         headers=auth_headers_map["manager"],
         json={
             "paid_amount_cents": random_paid_amount,
-            "appointment_id": APPOINTMENTS_ROWS[1]["appointment_id"],
+            "appointment_id": APPOINTMENTS_ROWS[3]["appointment_id"],
             "cleaner_id": APPOINTMENTS_ROWS[0]["cleaner_id"],
         },
     )
