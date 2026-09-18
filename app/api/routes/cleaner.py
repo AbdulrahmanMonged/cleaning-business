@@ -6,7 +6,7 @@ import structlog
 from app.api.debs import role_dependency, db_dependency
 from app.crud import (
     collect_money,
-    fetch_all_available_clenaers,
+    fetch_all_available_cleaners,
     get_cleaner_appointments,
     update_appointment_status,
 )
@@ -64,7 +64,7 @@ async def cleaner_post_collect_money(
 @router.post(
     "/{appointment_id}/start-appointment", response_model=RelatedAppointmentPublic
 )
-async def cleaner_cancel_appointment(
+async def cleaner_start_appointment(
     user: role_dependency[Roles.CLEANER],
     db: db_dependency,
     appointment_id: int = Path(ge=0),

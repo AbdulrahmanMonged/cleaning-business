@@ -17,7 +17,7 @@ from app.crud import (
     assign_cleaner_to_appointment,
     change_role,
     collect_money,
-    fetch_all_available_clenaers,
+    fetch_all_available_cleaners,
     fetch_cleaner_collected_money,
     fetch_cleaner_collected_money_appointment_view,
     trigger_is_recurred,
@@ -62,7 +62,7 @@ async def get_cleaner_collected_money(
     "/{cleaner_id}/get-cleaner-appointment-collected-money",
     response_model=list[CollectedMoneyCleanerAppointmentResponse],
 )
-async def get_cleaner_appointmentment_collected_money(
+async def get_cleaner_appointment_collected_money(
     user: role_dependency[Roles.MANAGER],
     db: db_dependency,
     cleaner_id: int = Path(ge=0),
@@ -109,5 +109,5 @@ async def trigger_recurred_appointment(
 async def get_available_cleaners(
     db: db_dependency, role: role_dependency[Roles.MANAGER]
 ):
-    available_cleaners = await fetch_all_available_clenaers(db)
+    available_cleaners = await fetch_all_available_cleaners(db)
     return available_cleaners

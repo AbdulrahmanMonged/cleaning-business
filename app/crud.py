@@ -90,7 +90,7 @@ async def get_all_users_by_role(db: AsyncSession, role: Roles | None = None):
     return results
 
 
-async def fetch_all_available_clenaers(db: AsyncSession):
+async def fetch_all_available_cleaners(db: AsyncSession):
     scalars_result = await db.scalars(
         select(User).where(User.is_available, User.role == Roles.CLEANER)
     )
